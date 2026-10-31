@@ -41,7 +41,7 @@ class AttachmentStoreTest {
         // the way the filesystem does.
         assertEquals(
             "attachments/Photo.PNG",
-            AttachmentStore.uniqueAttachmentPath("Photo.PNG") { it != "attachments/photo.png" },
+            AttachmentStore.uniqueAttachmentPath("Photo.PNG") { it == "attachments/photo.png" },
         )
     }
 
