@@ -35,13 +35,13 @@ class AttachmentStoreTest {
     }
 
     @Test
-    fun `comparison of taken paths is the caller's job; names keep their case`() {
+    fun `names keep their case - dedup comparison is the caller's job`() {
         // uniqueAttachmentPath itself is case-sensitive; Vault passes a
         // case-insensitive existence check so SAF FAT/exFAT providers dedupe
         // the way the filesystem does.
         assertEquals(
             "attachments/Photo.PNG",
-            AttachmentStore.uniqueAttachmentPath("Photo.PNG") { it.equals("attachments/photo.png", ignoreCase = true) == false },
+            AttachmentStore.uniqueAttachmentPath("Photo.PNG") { it != "attachments/photo.png" },
         )
     }
 
