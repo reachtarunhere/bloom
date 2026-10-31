@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rrajath.grove.settings.FontSizePreference
 import com.rrajath.grove.settings.GroveSettings
@@ -55,10 +56,10 @@ class SettingsAppearanceScreenTest {
         content()
         composeRule.onNodeWithText("Look and Feel").assertIsDisplayed()
         composeRule.onNodeWithText("Theme").assertIsDisplayed()
-        composeRule.onNodeWithText("Text size").assertIsDisplayed()
-        composeRule.onNodeWithText("Small").assertIsDisplayed()
-        composeRule.onNodeWithText("Medium").assertIsDisplayed()
-        composeRule.onNodeWithText("Large").assertIsDisplayed()
+        composeRule.onNodeWithText("Text size").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Small").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Medium").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Large").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -69,11 +70,11 @@ class SettingsAppearanceScreenTest {
             onSetAppFontSize = { picked = it },
         )
 
-        composeRule.onNodeWithText("Large").performClick()
+        composeRule.onNodeWithText("Large").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 3_000) { picked != null }
         assertEquals(FontSizePreference.LARGE, picked)
 
-        composeRule.onNodeWithText("Small").performClick()
+        composeRule.onNodeWithText("Small").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 3_000) { picked == FontSizePreference.SMALL }
     }
 
@@ -88,7 +89,7 @@ class SettingsAppearanceScreenTest {
             onSetSyncAppIconWithTheme = { enabled = it },
         )
 
-        composeRule.onNodeWithText("Sync App Icon with Theme").performClick()
+        composeRule.onNodeWithText("Sync App Icon with Theme").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 3_000) { enabled != null }
         assertEquals(true, enabled)
     }
