@@ -1339,31 +1339,21 @@ internal fun BodyBlocks(
     blocks.forEach { block ->
         when (block) {
             is OrgBlock.Paragraph -> {
-                // A paragraph that is exactly one image link (the shape the
-                // editor's image button writes on its own line) renders as the
-                // image itself, like Emacs `org-display-inline-images`.
-                val imagePath = if (block.lines.size == 1) {
-                    AttachmentSupport.standaloneImageLink(block.lines[0], currentFile)
-                } else null
-                if (imagePath != null) {
-                    InlineImageBlock(
-                        path = imagePath,
-                        vault = vault,
-                        onOpenImage = onOpenImage,
-                        onDoubleTap = onEditAt,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                } else {
-                    // Each source line in the paragraph keeps its own visual line
-                    // (join with "\n", not " "): a single newline in edit mode is a
-                    // line break in read mode too. A blank line already separates
-                    // paragraphs upstream in BlockParser.
-                    OrgText(
-                        block.lines.joinToString("\n") { it.trim() },
-                        onOpenLink = openTarget, onLinkLongPress = onLinkLongPress,
-                        onDoubleTapAt = onEditAt,
-                        style = paragraphStyle,
-                    )
+                AttachmentSupport.splitParagraph(block.lines, currentFile).forEach { part ->
+                    when (part) {
+                        is AttachmentSupport.ParagraphPart.Image -> InlineImageBlock(
+                            path = part.path,
+                            vault = vault,
+                            onOpenImage = onOpenImage,
+                            onDoubleTap = onEditAt,
+                        )
+                        is AttachmentSupport.ParagraphPart.Text -> OrgText(
+                            part.lines.joinToString("\n") { it.trim() },
+                            onOpenLink = openTarget, onLinkLongPress = onLinkLongPress,
+                            onDoubleTapAt = onEditAt,
+                            style = paragraphStyle,
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                 }
             }

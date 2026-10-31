@@ -17,7 +17,6 @@ import com.rrajath.grove.org.OrgKeywords
 import com.rrajath.grove.org.OrgMutations
 import com.rrajath.grove.org.OrgParser
 import com.rrajath.grove.org.OrgTimestamp
-import com.rrajath.grove.org.TextEdit
 import com.rrajath.grove.org.markedDoneMessage
 import com.rrajath.grove.org.newOrgId
 import com.rrajath.grove.org.nextRepeatOccurrence
@@ -385,13 +384,12 @@ class EditorViewModel(
 
     /**
      * Copy an image picked from the gallery into the vault's `attachments/`
-     * folder and return the buffer edit that splices a `[[file:…]]` link for it
-     * in at the cursor — on its own line when the cursor isn't already alone on
-     * one (the shape read mode renders inline). [displayName] is the picked
-     * file's name; [bytes] its content. Returns null when the copy failed (and
-     * [attachError] says why). Suspend: the vault copy is disk I/O.
+     * folder and return the `[[file:…]]` link text for it, relative to the note
+     * being edited. The screen splices it in at the live cursor as a user edit,
+     * so the note turns dirty and the save icon shows. Returns null when the
+     * copy failed (and [attachError] says why).
      */
-    suspend fun attachImage(displayName: String, bytes: ByteArray): TextEdit? {
+    suspend fun attachImage(displayName: String, bytes: ByteArray): String? {
         val vault = vaultFlow.value ?: run {
             _attachError.value = "No vault selected"
             return null
@@ -400,18 +398,7 @@ class EditorViewModel(
         val path = runCatching { vault.saveAttachment(displayName, bytes) }
             .onFailure { _attachError.value = "Couldn't save ${displayName.substringAfterLast('/')}" }
             .getOrNull() ?: return null
-        val link = AttachmentStore.linkText(fileName, path)
-        val buffer = _state.value.buffer
-        // Insert at the end of the buffer: the screen's text field reports the
-        // live cursor via onBufferChange, but the buffer the view model holds is
-        // the last reported text — splicing at its end lands right after whatever
-        // the user last typed, which is where a toolbar insert belongs.
-        val at = buffer.length
-        val snippet = if (at > 0 && buffer[at - 1] != '\n') "\n$link\n" else "$link\n"
-        return TextEdit(
-            buffer.substring(0, at) + snippet + buffer.substring(at),
-            at + snippet.length,
-        )
+        return AttachmentStore.linkText(fileName, path)
     }
 
     /** The text field reporting the user's own typing; never echoed back to it. */

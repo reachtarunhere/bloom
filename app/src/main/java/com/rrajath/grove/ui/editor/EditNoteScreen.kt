@@ -69,6 +69,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rrajath.grove.capture.RoamNodeResult
 import com.rrajath.grove.capture.formatLink
 import com.rrajath.grove.org.LineEditing
+import com.rrajath.grove.ui.attachments.AttachmentSupport
 import com.rrajath.grove.org.OrgDocument
 import com.rrajath.grove.org.OrgHeadline
 import com.rrajath.grove.org.OrgTimestamp
@@ -219,8 +220,11 @@ fun EditNoteScreen(
             return@rememberLauncherForActivityResult
         }
         coroutineScope.launch {
-            val edit = viewModel.attachImage(name, bytes) ?: return@launch
-            setText(edit.text, TextRange(edit.cursor))
+            val link = viewModel.attachImage(name, bytes) ?: return@launch
+            textState.applyEdit {
+                val edit = AttachmentSupport.insertImageLink(it.text, it.selection.start, link)
+                TextFieldValue(edit.text, TextRange(edit.cursor))
+            }
         }
     }
     LaunchedEffect(attachError) {

@@ -5,6 +5,7 @@ import com.rrajath.grove.org.InlineTokenizer
 import com.rrajath.grove.org.InlineType
 import com.rrajath.grove.org.OrgLinkParser
 import com.rrajath.grove.org.OrgLinkTarget
+import com.rrajath.grove.org.TextEdit
 
 /**
  * Pure helpers for attachment links in read mode: deciding whether a line (or
@@ -47,4 +48,36 @@ object AttachmentSupport {
     /** The org link text for an attachment already stored at [vaultPath], from a note in [fromFile]. */
     fun linkFor(fromFile: String, vaultPath: String): String =
         AttachmentStore.linkText(fromFile, vaultPath)
+
+    sealed interface ParagraphPart {
+        data class Text(val lines: List<String>) : ParagraphPart
+        data class Image(val path: String) : ParagraphPart
+    }
+
+    fun splitParagraph(lines: List<String>, currentFile: String): List<ParagraphPart> {
+        val parts = mutableListOf<ParagraphPart>()
+        val text = mutableListOf<String>()
+        fun flush() {
+            if (text.isNotEmpty()) parts += ParagraphPart.Text(text.toList())
+            text.clear()
+        }
+        lines.forEach { line ->
+            val image = standaloneImageLink(line, currentFile)
+            if (image != null) {
+                flush()
+                parts += ParagraphPart.Image(image)
+            } else {
+                text += line
+            }
+        }
+        flush()
+        return parts
+    }
+
+    fun insertImageLink(text: String, cursor: Int, link: String): TextEdit {
+        val at = cursor.coerceIn(0, text.length)
+        val prefix = if (at > 0 && text[at - 1] != '\n') "\n" else ""
+        val snippet = "$prefix$link\n"
+        return TextEdit(text.substring(0, at) + snippet + text.substring(at), at + snippet.length)
+    }
 }

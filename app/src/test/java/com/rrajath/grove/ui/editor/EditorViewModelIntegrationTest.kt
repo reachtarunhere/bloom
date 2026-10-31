@@ -27,7 +27,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -402,40 +401,33 @@ class EditorViewModelIntegrationTest {
     }
 
     @Test
-    fun `attachImage copies the bytes into attachments and splices a relative file link`() = runTest {
+    fun `attachImage copies the bytes into attachments and returns a relative file link`() = runTest {
         val line = headlineLine("projects.org", "Ship v2")
         val vm = editor()
         vm.load(NoteRef("projects.org", line))
         advanceUntilIdle()
 
-        val edit = vm.attachImage("IMG_1.jpg", byteArrayOf(1, 2, 3))
+        val link = vm.attachImage("IMG_1.jpg", byteArrayOf(1, 2, 3))
         advanceUntilIdle()
 
-        assertNotNull(edit)
-        // Root-level note: the link is plain vault-relative.
-        assertTrue(edit!!.text.endsWith("[[file:attachments/IMG_1.jpg]]\n"))
-        assertEquals(edit.text.length, edit.cursor)
-        // The bytes landed in the vault under the de-duped name.
+        assertEquals("[[file:attachments/IMG_1.jpg]]", link)
         assertEquals("010203", store.snapshot()["attachments/IMG_1.jpg"])
 
-        // A second pick of the same name de-dupes to -1.
-        val edit2 = vm.attachImage("IMG_1.jpg", byteArrayOf(9))
-        assertTrue(edit2!!.text.contains("[[file:attachments/IMG_1-1.jpg]]"))
+        val link2 = vm.attachImage("IMG_1.jpg", byteArrayOf(9))
+        assertEquals("[[file:attachments/IMG_1-1.jpg]]", link2)
         assertEquals("09", store.snapshot()["attachments/IMG_1-1.jpg"])
     }
 
     @Test
     fun `attachImage from a nested note writes a dotdot-relative link`() = runTest {
-        // Seed a nested notebook on top of the default fixtures.
         store.write("projects/acme.org", "* Acme kickoff\nbody\n")
         val line = headlineLineIn(store.read("projects/acme.org"), "Acme kickoff")
         val vm = editor()
         vm.load(NoteRef("projects/acme.org", line))
         advanceUntilIdle()
 
-        val edit = vm.attachImage("scan.png", byteArrayOf(7))
+        val link = vm.attachImage("scan.png", byteArrayOf(7))
         advanceUntilIdle()
-        assertNotNull(edit)
-        assertTrue(edit!!.text.contains("[[file:../attachments/scan.png]]"))
+        assertEquals("[[file:../attachments/scan.png]]", link)
     }
 }
