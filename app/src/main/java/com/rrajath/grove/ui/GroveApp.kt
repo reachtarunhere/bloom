@@ -64,6 +64,7 @@ import com.rrajath.grove.ui.nav.navPopExitTransition
 import com.rrajath.grove.ui.reminders.ExactAlarmPromptDialog
 import com.rrajath.grove.ui.reminders.ReminderAccessIntents
 import com.rrajath.grove.ui.reminders.ReminderResolveScreen
+import com.rrajath.grove.ui.attachments.ImageViewerScreen
 import com.rrajath.grove.ui.screens.ConflictScreen
 import com.rrajath.grove.ui.screens.GroveDrawerContent
 import com.rrajath.grove.ui.screens.NotebooksScreen
@@ -525,6 +526,14 @@ private fun GroveNavigation(
                     editModeFontSize = settings.editModeFontSize,
                 )
             }
+            composable(Routes.IMAGE) { entry ->
+                ImageViewerScreen(
+                    // Nav path args arrive already Uri-decoded, same as fileName above.
+                    path = entry.arguments?.getString("path").orEmpty(),
+                    vault = app.vault.value,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(Routes.FILE) { entry ->
                 val fileName = entry.arguments?.getString("fileName").orEmpty()
                 // Local, not a nav argument, for the same reason as NOTE: the
@@ -600,6 +609,8 @@ private fun GroveNavigation(
                             navController.navigate(Routes.drawer(drawerRef.fileName, kind, drawerRef.encode()))
                         },
                         onOpenBlock = { target, line -> navController.navigate(Routes.block(target, line)) },
+                        onOpenImage = { path -> navController.navigate(Routes.image(path)) },
+                        vault = app.vault.value,
                         onOpenPreface = { target -> navController.navigate(Routes.preface(target)) },
                         onOpenFileProperties = { target ->
                             navController.navigate(Routes.drawer(target, "fileProps"))
@@ -812,6 +823,8 @@ private fun GroveNavigation(
                             onOpenBlock = { fileName, line ->
                                 navController.navigate(Routes.block(fileName, line))
                             },
+                            onOpenImage = { path -> navController.navigate(Routes.image(path)) },
+                            vault = app.vault.value,
                             showPropertyDrawers = settings.showPropertyDrawers,
                             readModeFontSize = settings.readModeFontSize,
                             favorites = remember(favorites, ref.fileName) { favoritesFor(favorites, ref.fileName) },

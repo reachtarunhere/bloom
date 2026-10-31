@@ -65,6 +65,7 @@ import com.rrajath.grove.ui.theme.PlexSans
 import com.rrajath.grove.ui.theme.grove
 import com.rrajath.grove.ui.util.IntSetSaver
 import com.rrajath.grove.ui.vault.DocumentUiState
+import com.rrajath.grove.vault.Vault
 import com.rrajath.grove.ui.vault.DocumentViewModel
 import com.rrajath.grove.ui.vault.PendingEdit
 import com.rrajath.grove.ui.vault.NoteRef
@@ -96,6 +97,13 @@ fun ReadFileScreen(
     onOpenBlock: (fileName: String, line: Int) -> Unit = { _, _ -> },
     onOpenPreface: (fileName: String) -> Unit = {},
     onOpenFileProperties: (fileName: String) -> Unit = {},
+    /**
+     * A tapped image attachment (`[[file:attachments/x.png]]`): arg is the
+     * vault-relative path — opens the full-screen image viewer.
+     */
+    onOpenImage: (String) -> Unit = {},
+    /** The vault, for decoding inline image attachments; null hides inline images. */
+    vault: Vault? = null,
     /** Settings toggle: show a collapsible section for the file-level `#+` keywords. */
     showPreface: Boolean = true,
     /** Settings toggle: show collapsible sections for `:PROPERTIES:`/`:LOGBOOK:` drawers. */
@@ -145,8 +153,8 @@ fun ReadFileScreen(
     }
     // Resolves a tapped org link (heading/id: → Read mode, whole file → outline,
     // external scheme → OS, unresolved → toast). See DocumentViewModel.openOrgLink.
-    val onOpenLink: (String) -> Unit = remember(viewModel, onOpenNote, onOpenOutline, fileName) {
-        { target -> viewModel.openOrgLink(target, fileName, onOpenNote, onOpenOutline) }
+    val onOpenLink: (String) -> Unit = remember(viewModel, onOpenNote, onOpenOutline, onOpenImage, fileName) {
+        { target -> viewModel.openOrgLink(target, fileName, onOpenNote, onOpenOutline, onOpenImage) }
     }
 
     // Reload whenever the screen comes back to the foreground (e.g. returning
@@ -246,6 +254,8 @@ fun ReadFileScreen(
                                 onOpenBlock = { line -> onOpenBlock(fileName, line) },
                                 onOpenPreface = onOpenPreface,
                                 onOpenFileProperties = onOpenFileProperties,
+                                onOpenImage = onOpenImage,
+                                vault = vault,
                                 onToggleCheckbox = { line, longPress ->
                                     if (longPress) viewModel.toggleChecklistProgress(line)
                                     else viewModel.toggleChecklistDone(line)
@@ -311,6 +321,8 @@ internal fun FileContent(
     onOpenBlock: (Int) -> Unit,
     onOpenPreface: (fileName: String) -> Unit,
     onOpenFileProperties: (fileName: String) -> Unit,
+    onOpenImage: (String) -> Unit = {},
+    vault: Vault? = null,
     /** Toggle a checklist box: `longPress` false = tap (done), true = long-press (in-progress). */
     onToggleCheckbox: (line: Int, longPress: Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -397,6 +409,7 @@ internal fun FileContent(
                                     BodyBlocks(
                                         intro, doc.introStart, onToggleCheckbox,
                                         onOpenLink, onLinkLongPress, onEdit, onOpenBlock,
+                                        currentFile = fileName, onOpenImage = onOpenImage, vault = vault,
                                     )
                                 }
                             }
@@ -428,6 +441,8 @@ internal fun FileContent(
                         onOpenLink = onOpenLink,
                         onLinkLongPress = onLinkLongPress,
                         onOpenBlock = onOpenBlock,
+                        onOpenImage = onOpenImage,
+                        vault = vault,
                     )
                 }
                 item(key = "bottom-spacer") { Spacer(Modifier.height(40.dp)) }

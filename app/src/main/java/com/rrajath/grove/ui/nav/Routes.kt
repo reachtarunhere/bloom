@@ -36,6 +36,11 @@ object Routes {
     /** A single `#+BEGIN_x … #+END_x` block, opened by double-tapping it in Read mode;
      *  [line] is the absolute doc line of its `#+BEGIN` (or first affiliated line). */
     const val BLOCK = "block/{fileName}?line={line}"
+    /**
+     * Full-screen image viewer for a vault attachment: [path] is the
+     * vault-relative path a `[[file:…]]` image link resolved to.
+     */
+    const val IMAGE = "image/{path}"
     const val CAPTURE = "capture"
     const val CAPTURE_TEMPLATE = "capture/{templateId}"
     const val SEARCH = "search?q={q}&notebook={notebook}"
@@ -110,6 +115,7 @@ object Routes {
     fun drawer(fileName: String, kind: String, noteId: String? = null) =
         "drawer/${encode(fileName)}?kind=$kind" + (noteId?.let { "&noteId=${encode(it)}" } ?: "")
     fun block(fileName: String, line: Int) = "block/${encode(fileName)}?line=$line"
+    fun image(path: String) = "image/${encode(path)}"
     fun capture(templateId: String? = null) =
         if (templateId == null) CAPTURE else "capture/${encode(templateId)}"
     fun conflict(notebookId: String) = "conflict/${encode(notebookId)}"

@@ -1005,4 +1005,29 @@ class DocumentViewModelIntegrationTest {
             doc.directChildren(doc.headlines.first { it.title == "Ship v2 release" }).map { it.title },
         )
     }
+
+    @Test
+    fun `image attachment link opens the image viewer`() = runTest {
+        store.writeBytes("attachments/photo.png", byteArrayOf(1, 2, 3))
+        val vm = loaded("links-hub.org")
+        val images = mutableListOf<String>()
+        vm.openOrgLink(
+            "file:attachments/photo.png", "links-hub.org",
+            onOpenNote = {}, onOpenOutline = {}, onOpenImage = { images += it },
+        )
+        settleUntil { images.isNotEmpty() }
+        assertEquals(listOf("attachments/photo.png"), images)
+    }
+
+    @Test
+    fun `missing attachment link shows not-found and opens nothing`() = runTest {
+        val vm = loaded("links-hub.org")
+        val images = mutableListOf<String>()
+        vm.openOrgLink(
+            "file:attachments/gone.png", "links-hub.org",
+            onOpenNote = {}, onOpenOutline = {}, onOpenImage = { images += it },
+        )
+        advanceUntilIdle()
+        assertTrue(images.isEmpty())
+    }
 }

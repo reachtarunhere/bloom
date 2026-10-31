@@ -33,7 +33,16 @@ class JvmFileStore(
 
     override suspend fun read(name: String): String = resolve(name).readText()
 
+    override suspend fun readBytes(name: String): ByteArray = resolve(name).readBytes()
+
+    override suspend fun writeBytes(name: String, bytes: ByteArray) {
+        resolve(name).apply { parentFile?.mkdirs() }.writeBytes(bytes)
+    }
+
     override fun absolutePath(name: String): String = resolve(name).absolutePath
+
+    override suspend fun contentUri(name: String): String? =
+        if (resolve(name).isFile) "file://${resolve(name).absolutePath}" else null
 
     override suspend fun write(name: String, content: String) {
         resolve(name).apply { parentFile?.mkdirs() }.writeText(content)

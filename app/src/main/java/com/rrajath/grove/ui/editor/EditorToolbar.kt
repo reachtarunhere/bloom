@@ -49,6 +49,11 @@ fun EditorToolbar(
     onHeading: () -> Unit,
     onIndent: (Int) -> Unit,
     /**
+     * The image button: opens the photo picker. Null on surfaces that can't
+     * attach files (quick capture, region editors); the button is hidden then.
+     */
+    onImage: (() -> Unit)? = null,
+    /**
      * Long-press on the `[[]]` button. Supplied by the note editor and Dailies,
      * where it opens the file/heading link picker; null elsewhere (the button is
      * then tap-only).
@@ -79,6 +84,9 @@ fun EditorToolbar(
         ToolButton(icon = R.drawable.ic_code, color = c.ink, modifier = Modifier.weight(1f)) { onWrap('~') }
         ToolButton(icon = R.drawable.ic_check_box, color = c.ink, modifier = Modifier.weight(1f)) { onInsert("\n- [ ] ") }
         LinkToolButton(onLink = onLink, onLongPress = onLinkLongPress)
+        if (onImage != null) {
+            ToolButton(icon = R.drawable.ic_image, color = c.ink, modifier = Modifier.weight(1f)) { onImage() }
+        }
         // The clock glyph is drawn smaller than the letters at a given size, so
         // bump its font so it reads at the same height as the other buttons.
         // Tap inserts an inactive date-only stamp; long-press adds the time

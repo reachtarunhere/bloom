@@ -144,3 +144,48 @@ class OrgLinkParserTest {
         assertEquals(OrgLinkTarget.Fuzzy("Meeting notes"), parse("Meeting notes"))
     }
 }
+
+class OrgLinkParserAttachmentTest {
+
+    private fun parse(target: String, currentFile: String = "notes.org") =
+        OrgLinkParser.parse(target, currentFile)
+
+    @Test
+    fun `file link to an image is an image attachment`() {
+        assertEquals(
+            OrgLinkTarget.Attachment("attachments/photo.jpg", true),
+            parse("file:attachments/photo.jpg"),
+        )
+    }
+
+    @Test
+    fun `bare attachment-looking token is an attachment, not fuzzy`() {
+        assertEquals(
+            OrgLinkTarget.Attachment("attachments/doc.pdf", false),
+            parse("attachments/doc.pdf"),
+        )
+    }
+
+    @Test
+    fun `relative image link normalizes against the current file's dir without gaining dot-org`() {
+        assertEquals(
+            OrgLinkTarget.Attachment("data/img.png", true),
+            parse("file:../data/img.png", "projects/notes.org"),
+        )
+    }
+
+    @Test
+    fun `org links still classify as files`() {
+        assertEquals(OrgLinkTarget.File("other.org"), parse("file:other.org"))
+        assertEquals(OrgLinkTarget.File("other.org"), parse("file:other"))
+        assertEquals(OrgLinkTarget.File("projects/acme.org"), parse("file:projects/acme"))
+    }
+
+    @Test
+    fun `attachment with a search option keeps file-heading semantics`() {
+        assertEquals(
+            OrgLinkTarget.FileHeading("attachments/doc.pdf", "page 3"),
+            parse("file:attachments/doc.pdf::page 3"),
+        )
+    }
+}

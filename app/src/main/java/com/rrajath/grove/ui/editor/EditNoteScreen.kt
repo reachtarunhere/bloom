@@ -201,6 +201,34 @@ fun EditNoteScreen(
     // at a collapsed cursor -- the two never fire at once (see wordAtCursor's own
     // collapsed-selection check), so they share the same docked strip location.
     val coroutineScope = rememberCoroutineScope()
+
+    val attachError by viewModel.attachError.collectAsStateWithLifecycle()
+    // The Android photo picker: no storage permission needed (it grants per-pick
+    // URI access), so it works from API 23 up via the activity-result contract.
+    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val resolver = context.contentResolver
+        val name = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            ?: uri.lastPathSegment?.substringAfterLast('/') ?: "image.jpg"
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+        if (bytes == null) {
+            Toast.makeText(context, "Couldn't read the picked image", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        coroutineScope.launch {
+            val edit = viewModel.attachImage(name, bytes) ?: return@launch
+            setText(edit.text, TextRange(edit.cursor))
+        }
+    }
+    LaunchedEffect(attachError) {
+        attachError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearAttachError()
+        }
+    }
     val roamNodeTemplates by viewModel.roamNodeSuggestionTemplates.collectAsStateWithLifecycle()
     var roamNodeSelection by remember { mutableStateOf<Pair<String, TextRange>?>(null) }
     var roamNodeExpandedKeys by remember(roamNodeSelection?.second) { mutableStateOf(emptySet<String>()) }
@@ -663,6 +691,13 @@ fun EditNoteScreen(
                     viewModel.startLinkPicker()
                 },
                 onTimestampLongPress = { timestampPickerOpen = true },
+                onImage = {
+                    imagePicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
             )
         }
     }

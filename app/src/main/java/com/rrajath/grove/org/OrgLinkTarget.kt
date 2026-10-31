@@ -19,6 +19,15 @@ sealed interface OrgLinkTarget {
     /** `[[file:foo.org]]` / `[[./foo.org]]` / `[[foo.org]]` — a whole file (→ its outline). */
     data class File(val path: String) : OrgLinkTarget
 
+    /**
+     * `[[file:attachments/photo.jpg]]` — a non-org file inside the vault, e.g. an
+     * image Bloom copied in via the editor's image button. `[[file:…]]` links to
+     * attachments resolve to the image viewer (images) or an OS hand-off (any
+     * other file) instead of a notebook outline; [path] is the vault-relative
+     * path the `file:` part normalized to.
+     */
+    data class Attachment(val path: String, val isImage: Boolean) : OrgLinkTarget
+
     /** `[[file:foo.org::*Heading]]` — a headline in another file, matched by title. */
     data class FileHeading(val path: String, val text: String) : OrgLinkTarget
 
@@ -90,7 +99,9 @@ object OrgLinkParser {
             val path = resolvePath(filePart.trim(), currentFile)
             val s = search?.trim()
             return when {
-                s.isNullOrEmpty() -> OrgLinkTarget.File(path)
+                s.isNullOrEmpty() ->
+                    if (path.endsWith(".org", ignoreCase = true)) OrgLinkTarget.File(path)
+                    else OrgLinkTarget.Attachment(path, AttachmentStore.isImagePath(path))
                 s.startsWith("#") -> OrgLinkTarget.FileCustomId(path, s.removePrefix("#").trim())
                 s.startsWith("*") -> OrgLinkTarget.FileHeading(path, s.trimStart('*').trim())
                 else -> OrgLinkTarget.FileHeading(path, s)
@@ -118,10 +129,20 @@ object OrgLinkParser {
 
     private fun looksLikePath(head: String): Boolean =
         head.endsWith(".org", ignoreCase = true) ||
+            hasKnownAttachmentExtension(head) ||
             head.startsWith("./") ||
             head.startsWith("../") ||
             head.startsWith("/") ||
             head.contains('/')
+
+    /** Any extension Bloom treats as an attachment (image or not) makes a bare token path-shaped. */
+    private fun hasKnownAttachmentExtension(head: String): Boolean =
+        ATTACHMENT_EXTENSIONS.any { head.endsWith(it, ignoreCase = true) }
+
+    private val ATTACHMENT_EXTENSIONS = listOf(
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif",
+        ".pdf", ".txt", ".md", ".csv", ".zip",
+    )
 
     /**
      * Normalize a link's file part to a vault-relative path (`.org` suffixed).
@@ -145,6 +166,10 @@ object OrgLinkParser {
             }
         }
         val joined = segments.joinToString("/")
-        return if (joined.endsWith(".org", ignoreCase = true)) joined else "$joined.org"
+        // A bare name (`[[file:notes]]`) means the notebook `notes.org`; a name
+        // that already carries an extension (`attachments/photo.jpg`, `doc.pdf`)
+        // is an attachment and keeps its own path.
+        val leaf = joined.substringAfterLast('/')
+        return if (leaf.contains('.')) joined else "$joined.org"
     }
 }

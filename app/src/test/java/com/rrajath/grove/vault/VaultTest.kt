@@ -236,7 +236,9 @@ class VaultTest {
         override suspend fun list(): List<FileEntry> =
             files.map { (name, body) -> FileEntry(name, 0L, body.length.toLong()) }
         override suspend fun read(name: String): String = files.getValue(name)
+        override suspend fun readBytes(name: String): ByteArray = files.getValue(name).toByteArray(Charsets.UTF_8)
         override suspend fun write(name: String, content: String) { files[name] = content }
+        override suspend fun writeBytes(name: String, bytes: ByteArray) { files[name] = String(bytes, Charsets.UTF_8) }
         override suspend fun create(name: String): Boolean {
             if (name in files) return false
             files[name] = ""
@@ -286,5 +288,44 @@ class VaultTest {
         v.save("roam/daily/2026-09-23.org", "* 19:20 Long run\n")
 
         assertEquals("* 19:20 Long run\n", store.read("roam/daily/2026-09-23.org"))
+    }
+}
+
+class VaultAttachmentTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private fun vault(): Vault = Vault(JvmFileStore(tmp.root))
+
+    @Test
+    fun `saveAttachment copies bytes under attachments and dedupes names`() = runTest {
+        val v = vault()
+        val p1 = v.saveAttachment("IMG_1.jpg", byteArrayOf(1, 2, 3))
+        val p2 = v.saveAttachment("IMG_1.jpg", byteArrayOf(4, 5))
+        assertEquals("attachments/IMG_1.jpg", p1)
+        assertEquals("attachments/IMG_1-1.jpg", p2)
+        assertEquals(byteArrayOf(1, 2, 3).toList(), v.readAttachment(p1)?.toList())
+        assertEquals(byteArrayOf(4, 5).toList(), v.readAttachment(p2)?.toList())
+    }
+
+    @Test
+    fun `readAttachment returns null for a missing file`() = runTest {
+        assertNull(vault().readAttachment("attachments/nope.png"))
+    }
+
+    @Test
+    fun `fileExists is case-insensitive and sees non-org files`() = runTest {
+        val v = vault()
+        v.saveAttachment("Pic.PNG", byteArrayOf(9))
+        assertTrue(v.fileExists("attachments/pic.png"))
+        assertFalse(v.fileExists("attachments/other.png"))
+    }
+
+    @Test
+    fun `attachmentUri is a file uri for the jvm store`() = runTest {
+        val v = vault()
+        val p = v.saveAttachment("a.png", byteArrayOf(1))
+        assertEquals("file://${tmp.root.absolutePath}/$p", v.attachmentUri(p))
     }
 }

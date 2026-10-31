@@ -66,6 +66,21 @@ class FakeFileStore(
         files[normalize(name)]?.content ?: throw FileNotFoundException(name)
     }
 
+    // Binary content lives in the same map, hex-encoded, so a snapshot() of the
+    // vault still shows attachments as text.
+    override suspend fun readBytes(name: String): ByteArray = mutex.withLock {
+        files[normalize(name)]?.content?.hexToBytes() ?: throw FileNotFoundException(name)
+    }
+
+    override suspend fun writeBytes(name: String, bytes: ByteArray) = mutex.withLock {
+        files[normalize(name)] = Node(bytes.toHex(), tick())
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    private fun String.hexToBytes(): ByteArray =
+        chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
     override suspend fun write(name: String, content: String) = mutex.withLock {
         val key = normalize(name)
         if (strictWrite && !files.containsKey(key)) throw FileNotFoundException(name)

@@ -1,5 +1,6 @@
 package com.rrajath.grove.vault
 
+import com.rrajath.grove.org.AttachmentStore
 import com.rrajath.grove.org.OrgDocument
 import com.rrajath.grove.org.OrgKeywords
 import com.rrajath.grove.org.OrgParser
@@ -145,6 +146,35 @@ class Vault(
 
     /** [fileName]'s device path, or the vault-relative [fileName] itself when the store can't tell. */
     fun absolutePath(fileName: String): String = store.absolutePath(fileName) ?: fileName
+
+    // --- attachments ---
+
+    /**
+     * Whether [path] names an existing file in the vault (any extension), for
+     * link resolution. Case-insensitive, since SAF providers over FAT/exFAT
+     * treat names that way (same rationale as [pathTaken]).
+     */
+    suspend fun fileExists(path: String): Boolean =
+        store.list().any { it.name.equals(path, ignoreCase = true) }
+
+    /**
+     * Copy [bytes] into the vault as an attachment: the vault-relative path they
+     * landed at. [displayName] (the picked file's name, e.g. `IMG_2041.jpg`)
+     * picks the file name; collisions are de-duped with a `-1`, `-2`, … suffix
+     * (see [com.rrajath.grove.org.AttachmentStore.uniqueAttachmentPath]).
+     */
+    suspend fun saveAttachment(displayName: String, bytes: ByteArray): String {
+        val path = AttachmentStore.uniqueAttachmentPath(displayName) { fileExists(it) }
+        store.writeBytes(path, bytes)
+        return path
+    }
+
+    /** Raw bytes of an attachment, or null when it's not in the vault. */
+    suspend fun readAttachment(path: String): ByteArray? =
+        if (fileExists(path)) store.readBytes(path) else null
+
+    /** A `content://`/`file://` URI string for [path], or null when the store can't produce one. */
+    suspend fun attachmentUri(path: String): String? = store.contentUri(path)
 
     suspend fun open(fileName: String): OrgDocument? {
         val entry = store.stat(fileName) ?: return null

@@ -671,6 +671,11 @@ sealed interface LinkResolution {
     data class Outline(val fileName: String) : LinkResolution
     /** Hand a URI to the OS (`http`, `mailto`, `tel`, …). */
     data class External(val uri: String) : LinkResolution
+    /**
+     * A `[[file:…]]` link to a file inside the vault: an image → the in-app
+     * viewer, anything else → the OS via the vault's content URI.
+     */
+    data class Attachment(val path: String, val isImage: Boolean) : LinkResolution
     /** Nothing matched; [label] is shown to the user. */
     data class NotFound(val label: String) : LinkResolution
 }
@@ -959,19 +964,38 @@ class DocumentViewModel(
      * (relative `file:` links resolve against its directory). An `id:`, heading,
      * or `::#custom-id` target opens Read mode of that heading via [onOpenNote];
      * a whole-file target opens that file's outline via [onOpenOutline]; an
-     * external scheme is handed to the OS; anything unresolved shows a toast.
+     * image attachment goes to [onOpenImage], a non-image attachment to the OS;
+     * an external scheme is handed to the OS; anything unresolved shows a toast.
      */
     fun openOrgLink(
         rawTarget: String,
         currentFile: String,
         onOpenNote: (NoteRef) -> Unit,
         onOpenOutline: (fileName: String) -> Unit,
+        onOpenImage: (String) -> Unit = {},
     ) {
         val doc = (_state.value as? DocumentUiState.Loaded)?.document
         viewModelScope.launch {
             when (val resolution = resolveOrgLink(rawTarget, currentFile, doc)) {
                 is LinkResolution.Note -> onOpenNote(resolution.ref)
                 is LinkResolution.Outline -> onOpenOutline(resolution.fileName)
+                is LinkResolution.Attachment -> {
+                    if (resolution.isImage) {
+                        onOpenImage(resolution.path)
+                    } else {
+                        val uri = vaultFlow.value?.attachmentUri(resolution.path)
+                        runCatching {
+                            if (uri != null) {
+                                app.startActivity(
+                                    Intent(Intent.ACTION_VIEW, uri.toUri())
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                )
+                            } else {
+                                showToast("Couldn't open ${resolution.path}")
+                            }
+                        }.onFailure { showToast("Couldn't open ${resolution.path}") }
+                    }
+                }
                 is LinkResolution.External -> runCatching {
                     app.startActivity(
                         Intent(Intent.ACTION_VIEW, resolution.uri.toUri())
@@ -1036,6 +1060,13 @@ class DocumentViewModel(
             is OrgLinkTarget.File ->
                 resolveNotebook(t.path, dao)?.let { LinkResolution.Outline(it) }
                     ?: LinkResolution.NotFound(t.path)
+
+            is OrgLinkTarget.Attachment ->
+                if (vaultFlow.value?.fileExists(t.path) == true) {
+                    LinkResolution.Attachment(t.path, t.isImage)
+                } else {
+                    LinkResolution.NotFound(t.path)
+                }
 
             is OrgLinkTarget.FileHeading -> {
                 val file = resolveNotebook(t.path, dao) ?: return LinkResolution.NotFound(t.path)

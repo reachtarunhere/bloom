@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -59,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -114,6 +116,8 @@ import com.rrajath.grove.ui.components.Pill
 import com.rrajath.grove.ui.components.annotateOrgInline
 import com.rrajath.grove.ui.components.doubleTapToEdit
 import com.rrajath.grove.ui.components.EditorMenuFab
+import com.rrajath.grove.ui.attachments.AttachmentSupport
+import com.rrajath.grove.vault.Vault
 import com.rrajath.grove.ui.components.linkPressHandler
 import com.rrajath.grove.ui.components.orgInlineLinks
 import com.rrajath.grove.ui.components.ScrollJumpButtons
@@ -171,6 +175,13 @@ fun ReadNoteScreen(
      * block. [line] is the absolute doc line of its `#+BEGIN` (or first affiliated line).
      */
     onOpenBlock: (fileName: String, line: Int) -> Unit = { _, _ -> },
+    /**
+     * A tapped image attachment (`[[file:attachments/x.png]]`, inline or not):
+     * arg is the vault-relative path — opens the full-screen image viewer.
+     */
+    onOpenImage: (String) -> Unit = {},
+    /** The vault, for decoding inline image attachments; null hides inline images. */
+    vault: Vault? = null,
     /** Settings toggle: show collapsible sections for `:PROPERTIES:`/`:LOGBOOK:` drawers. */
     showPropertyDrawers: Boolean = true,
     /** Settings § Notes: font-size lever for the rendered note. App chrome is unaffected. */
@@ -213,8 +224,8 @@ fun ReadNoteScreen(
     val repeatAdvance by viewModel.repeatAdvanced.collectAsStateWithLifecycle()
     // Resolves a tapped org link (heading/id: → Read mode, whole file → outline,
     // external scheme → OS, unresolved → toast). See DocumentViewModel.openOrgLink.
-    val onOpenLink: (String) -> Unit = remember(viewModel, onOpenNote, onOpenOutline, noteRef.fileName) {
-        { target -> viewModel.openOrgLink(target, noteRef.fileName, onOpenNote, onOpenOutline) }
+    val onOpenLink: (String) -> Unit = remember(viewModel, onOpenNote, onOpenOutline, onOpenImage, noteRef.fileName) {
+        { target -> viewModel.openOrgLink(target, noteRef.fileName, onOpenNote, onOpenOutline, onOpenImage) }
     }
     var metadataOpen by remember { mutableStateOf(false) }
     // Set on a completed move (refileConfirm/refileToArchive/refileToLastUsed), not a plain
@@ -334,6 +345,7 @@ fun ReadNoteScreen(
                         IntroContent(
                             doc = doc,
                             listState = listState,
+                            fileName = noteRef.fileName,
                             onOpenLink = onOpenLink,
                             onEdit = { onEdit(null) },
                             onOpenBlock = { line -> onOpenBlock(noteRef.fileName, line) },
@@ -341,6 +353,8 @@ fun ReadNoteScreen(
                                 if (longPress) viewModel.toggleChecklistProgress(line)
                                 else viewModel.toggleChecklistDone(line)
                             },
+                            onOpenImage = onOpenImage,
+                            vault = vault,
                             modifier = Modifier.fillMaxSize(),
                         )
                         Column(
@@ -392,6 +406,8 @@ fun ReadNoteScreen(
                                 if (longPress) viewModel.toggleChecklistProgress(line)
                                 else viewModel.toggleChecklistDone(line)
                             },
+                            onOpenImage = onOpenImage,
+                            vault = vault,
                             showPropertyDrawers = showPropertyDrawers,
                             favorites = favorites,
                             repeatAdvance = repeatAdvance,
@@ -587,11 +603,14 @@ internal fun ReadModeBreadcrumb(
 private fun IntroContent(
     doc: OrgDocument,
     listState: LazyListState,
+    fileName: String,
     onOpenLink: (String) -> Unit,
     onEdit: () -> Unit,
     onOpenBlock: (Int) -> Unit,
     /** Toggle a checklist box: `longPress` false = tap (done), true = long-press (in-progress). */
     onToggleCheckbox: (line: Int, longPress: Boolean) -> Unit,
+    onOpenImage: (String) -> Unit = {},
+    vault: Vault? = null,
     modifier: Modifier = Modifier,
 ) {
     val c = MaterialTheme.grove
@@ -619,7 +638,10 @@ private fun IntroContent(
             item(key = "intro-body") {
                 SelectionContainer {
                     Column {
-                        BodyBlocks(body, doc.introStart, onToggleCheckbox, openLink, onLinkLongPress, onEdit, onOpenBlock)
+                        BodyBlocks(
+                            body, doc.introStart, onToggleCheckbox, openLink, onLinkLongPress, onEdit, onOpenBlock,
+                            currentFile = fileName, onOpenImage = onOpenImage, vault = vault,
+                        )
                     }
                 }
             }
@@ -652,6 +674,8 @@ private fun NoteContent(
     onOpenBlock: (Int) -> Unit,
     /** Toggle a checklist box: `longPress` false = tap (done), true = long-press (in-progress). */
     onToggleCheckbox: (line: Int, longPress: Boolean) -> Unit,
+    onOpenImage: (String) -> Unit = {},
+    vault: Vault? = null,
     listState: LazyListState,
     modifier: Modifier = Modifier,
     showPropertyDrawers: Boolean = true,
@@ -877,7 +901,10 @@ private fun NoteContent(
                         Spacer(Modifier.height(16.dp))
 
                         // Own body
-                        BodyBlocks(ownBody, ownBodyStart, onToggleCheckbox, openLink, onLinkLongPress, { onEditAt(null) }, onOpenBlock)
+                        BodyBlocks(
+                            ownBody, ownBodyStart, onToggleCheckbox, openLink, onLinkLongPress, { onEditAt(null) }, onOpenBlock,
+                            currentFile = fileName, onOpenImage = onOpenImage, vault = vault,
+                        )
                     }
                 }
             }
@@ -906,6 +933,8 @@ private fun NoteContent(
                     onOpenLink = openLink,
                     onLinkLongPress = onLinkLongPress,
                     onOpenBlock = onOpenBlock,
+                    onOpenImage = onOpenImage,
+                    vault = vault,
                 )
             }
 
@@ -955,6 +984,8 @@ internal fun ReadHeadingRow(
     onOpenLink: (String) -> Unit,
     onLinkLongPress: (String, Offset, LayoutCoordinates) -> Unit,
     onOpenBlock: (Int) -> Unit,
+    onOpenImage: (String) -> Unit = {},
+    vault: Vault? = null,
 ) {
     val c = MaterialTheme.grove
     val body = remember(doc, child) { doc.bodyOf(child) }
@@ -1073,7 +1104,10 @@ internal fun ReadHeadingRow(
                 // A folded heading shows only its title + "… N"; its
                 // body and descendants stay unmounted.
                 if (!isCollapsed) {
-                    BodyBlocks(body, child.bodyStart, onToggleCheckbox, onOpenLink, onLinkLongPress, { onEditAt(child.lineIndex) }, onOpenBlock)
+                    BodyBlocks(
+                        body, child.bodyStart, onToggleCheckbox, onOpenLink, onLinkLongPress, { onEditAt(child.lineIndex) }, onOpenBlock,
+                        currentFile = fileName, onOpenImage = onOpenImage, vault = vault,
+                    )
                 }
             }
         }
@@ -1263,6 +1297,12 @@ internal fun BodyBlocks(
     onEditAt: () -> Unit,
     /** Double-tap on a `#+BEGIN_x` block body; arg is the absolute doc line of its first line. */
     onOpenBlock: (Int) -> Unit = {},
+    /** The file these body lines live in (relative `file:` image links resolve against its dir). */
+    currentFile: String = "",
+    /** A tapped/inline image attachment: arg is its vault-relative path. */
+    onOpenImage: (String) -> Unit = {},
+    /** The vault, to decode inline image bytes; null hides inline images. */
+    vault: Vault? = null,
 ) {
     val c = MaterialTheme.grove
     val haptics = LocalHapticFeedback.current
@@ -1299,17 +1339,33 @@ internal fun BodyBlocks(
     blocks.forEach { block ->
         when (block) {
             is OrgBlock.Paragraph -> {
-                // Each source line in the paragraph keeps its own visual line
-                // (join with "\n", not " "): a single newline in edit mode is a
-                // line break in read mode too. A blank line already separates
-                // paragraphs upstream in BlockParser.
-                OrgText(
-                    block.lines.joinToString("\n") { it.trim() },
-                    onOpenLink = openTarget, onLinkLongPress = onLinkLongPress,
-                    onDoubleTapAt = onEditAt,
-                    style = paragraphStyle,
-                )
-                Spacer(Modifier.height(12.dp))
+                // A paragraph that is exactly one image link (the shape the
+                // editor's image button writes on its own line) renders as the
+                // image itself, like Emacs `org-display-inline-images`.
+                val imagePath = if (block.lines.size == 1) {
+                    AttachmentSupport.standaloneImageLink(block.lines[0], currentFile)
+                } else null
+                if (imagePath != null) {
+                    InlineImageBlock(
+                        path = imagePath,
+                        vault = vault,
+                        onOpenImage = onOpenImage,
+                        onDoubleTap = onEditAt,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                } else {
+                    // Each source line in the paragraph keeps its own visual line
+                    // (join with "\n", not " "): a single newline in edit mode is a
+                    // line break in read mode too. A blank line already separates
+                    // paragraphs upstream in BlockParser.
+                    OrgText(
+                        block.lines.joinToString("\n") { it.trim() },
+                        onOpenLink = openTarget, onLinkLongPress = onLinkLongPress,
+                        onDoubleTapAt = onEditAt,
+                        style = paragraphStyle,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
             }
 
             is OrgBlock.ListBlock -> {
@@ -1430,6 +1486,62 @@ internal fun BodyBlocks(
                 OrgTableView(block.lines, onDoubleTap = onEditAt)
                 Spacer(Modifier.height(12.dp))
             }
+        }
+    }
+}
+
+/**
+ * One inline image in read mode: the attachment's bytes decoded from the vault
+ * and shown fit-to-width; tap opens the full-screen viewer, double-tap enters
+ * edit mode like any other body text. Renders a muted placeholder while loading
+ * or when the file is missing/not decodable, so a broken link never breaks the
+ * scroll.
+ */
+@Composable
+internal fun InlineImageBlock(
+    path: String,
+    vault: Vault?,
+    onOpenImage: (String) -> Unit,
+    onDoubleTap: () -> Unit,
+) {
+    val c = MaterialTheme.grove
+    var bitmap by remember(path) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var failed by remember(path) { mutableStateOf(false) }
+    LaunchedEffect(path, vault) {
+        if (vault == null) {
+            failed = true
+            return@LaunchedEffect
+        }
+        val bytes = runCatching { vault.readAttachment(path) }.getOrNull()
+        bitmap = bytes?.let { b ->
+            runCatching { android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size) }.getOrNull()
+        }
+        if (bitmap == null) failed = true
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.surface2)
+            .combinedClickable(onClick = { onOpenImage(path) }, onDoubleClick = onDoubleTap)
+            .padding(4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            bitmap != null -> Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = path.substringAfterLast('/'),
+                contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            failed -> Text(
+                path.substringAfterLast('/'),
+                fontFamily = PlexMono, fontSize = 12.sp, color = c.ink3,
+                modifier = Modifier.padding(8.dp),
+            )
+            else -> androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(24.dp).padding(8.dp), color = c.accent,
+            )
         }
     }
 }

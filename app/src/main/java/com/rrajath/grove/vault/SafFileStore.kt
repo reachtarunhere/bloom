@@ -263,6 +263,46 @@ class SafFileStore(
             ?: error("Cannot open $name")
     }
 
+    override suspend fun readBytes(name: String): ByteArray = withContext(Dispatchers.IO) {
+        val uri = documentUri(name) ?: error("File not found in vault: $name")
+        resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Cannot open $name")
+    }
+
+    override suspend fun writeBytes(name: String, bytes: ByteArray): Unit = withContext(Dispatchers.IO) {
+        // Like create(): an attachment write creates the file (and the
+        // attachments/ directory) when absent, then streams with "wt".
+        val uri = documentUri(name) ?: run {
+            val (dir, leaf) = splitPath(name)
+            val parentDocId = resolveDir(dir, createMissing = true) ?: error("Cannot create dir for $name")
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocId)
+            val created = DocumentsContract.createDocument(
+                resolver, parentUri, mimeTypeFor(leaf), leaf,
+            ) ?: error("Cannot create $name")
+            val actualName = displayNameOf(created)
+            if (actualName != null && actualName != leaf) {
+                DocumentsContract.renameDocument(resolver, created, leaf)?.let {
+                    docIds[name] = DocumentsContract.getDocumentId(it)
+                    return@withContext it
+                }
+            }
+            docIds[name] = DocumentsContract.getDocumentId(created)
+            created
+        }
+        resolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: error("Cannot write $name")
+    }
+
+    private fun mimeTypeFor(leaf: String): String = when (leaf.substringAfterLast('.', "").lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "heic" -> "image/heic"
+        "heif" -> "image/heif"
+        "pdf" -> "application/pdf"
+        else -> "application/octet-stream"
+    }
+
     override suspend fun write(name: String, content: String): Unit = withContext(Dispatchers.IO) {
         val uri = documentUri(name) ?: error("File not found in vault: $name")
         // "wt" = write + truncate. Plain "w" does NOT truncate on all providers.
@@ -368,6 +408,9 @@ class SafFileStore(
     override fun absolutePath(name: String): String? =
         if (treeUri.authority != EXTERNAL_STORAGE_AUTHORITY) null
         else externalStoragePath(rootDocId, name)
+
+    override suspend fun contentUri(name: String): String? =
+        documentUri(name)?.toString()
 
     override suspend fun pruneEmptyDirs(dir: String): Unit = withContext(Dispatchers.IO) {
         val trimmed = dir.trim('/')

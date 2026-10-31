@@ -37,7 +37,9 @@ private class CountingStore(private val root: File) : FileStore {
     }
 
     override suspend fun read(name: String) = inner.read(name)
+    override suspend fun readBytes(name: String) = inner.readBytes(name)
     override suspend fun write(name: String, content: String) = inner.write(name, content)
+    override suspend fun writeBytes(name: String, bytes: ByteArray) = inner.writeBytes(name, bytes)
     override suspend fun create(name: String) = inner.create(name)
     override suspend fun rename(oldName: String, newName: String) = inner.rename(oldName, newName)
     override suspend fun delete(name: String) = inner.delete(name)
@@ -237,7 +239,9 @@ class SyncEngineTest {
         val broken = object : com.rrajath.grove.vault.FileStore {
             override suspend fun list() = throw IllegalStateException("disk gone")
             override suspend fun read(name: String) = ""
+            override suspend fun readBytes(name: String) = ByteArray(0)
             override suspend fun write(name: String, content: String) {}
+            override suspend fun writeBytes(name: String, bytes: ByteArray) {}
             override suspend fun create(name: String) = false
             override suspend fun rename(oldName: String, newName: String) = false
             override suspend fun delete(name: String) = false

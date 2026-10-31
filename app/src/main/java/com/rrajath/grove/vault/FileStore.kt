@@ -47,6 +47,19 @@ interface FileStore {
     suspend fun read(name: String): String
 
     /**
+     * Raw bytes of [name] (attachments: images, PDFs, …). Text files should
+     * go through [read]; this is for binary content.
+     */
+    suspend fun readBytes(name: String): ByteArray
+
+    /**
+     * Write raw [bytes] to [name], truncating, creating the file (and any
+     * missing parent directories) when absent — attachments land in new files,
+     * unlike notebook writes which always target an existing file.
+     */
+    suspend fun writeBytes(name: String, bytes: ByteArray)
+
+    /**
      * Write full content, truncating. Implementations MUST truncate properly
      * (SAF streams need mode "wt" or shorter content leaves trailing bytes).
      */
@@ -85,6 +98,15 @@ interface FileStore {
      * store can't know one (e.g. a SAF provider that isn't local storage).
      */
     fun absolutePath(name: String): String? = null
+
+    /**
+     * A URI string (`content://…` for SAF, `file://…` for local storage) of
+     * [name] that another app can open, or null when the store can't produce
+     * one. Used to view attachments (the image viewer) and to hand non-image
+     * files to the OS. Kept a plain String so this interface stays free of
+     * Android types; callers parse it with `android.net.Uri.parse`.
+     */
+    suspend fun contentUri(name: String): String? = null
 }
 
 /** Directory names never descended into during vault traversal. */
