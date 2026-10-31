@@ -164,7 +164,10 @@ class Vault(
      * (see [com.rrajath.grove.org.AttachmentStore.uniqueAttachmentPath]).
      */
     suspend fun saveAttachment(displayName: String, bytes: ByteArray): String {
-        val path = AttachmentStore.uniqueAttachmentPath(displayName) { fileExists(it) }
+        // uniqueAttachmentPath's existence check is itself a suspend vault
+        // listing, so the lambda has to be suspend-aware.
+        val taken = store.list().map { it.name.lowercase() }.toSet()
+        val path = AttachmentStore.uniqueAttachmentPath(displayName) { it.lowercase() in taken }
         store.writeBytes(path, bytes)
         return path
     }

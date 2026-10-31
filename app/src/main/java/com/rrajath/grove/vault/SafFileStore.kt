@@ -275,15 +275,12 @@ class SafFileStore(
             val (dir, leaf) = splitPath(name)
             val parentDocId = resolveDir(dir, createMissing = true) ?: error("Cannot create dir for $name")
             val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocId)
-            val created = DocumentsContract.createDocument(
+            var created = DocumentsContract.createDocument(
                 resolver, parentUri, mimeTypeFor(leaf), leaf,
             ) ?: error("Cannot create $name")
             val actualName = displayNameOf(created)
             if (actualName != null && actualName != leaf) {
-                DocumentsContract.renameDocument(resolver, created, leaf)?.let {
-                    docIds[name] = DocumentsContract.getDocumentId(it)
-                    return@withContext it
-                }
+                DocumentsContract.renameDocument(resolver, created, leaf)?.let { created = it }
             }
             docIds[name] = DocumentsContract.getDocumentId(created)
             created
